@@ -285,82 +285,16 @@ bool Game::SelectPiece(Square Cells[][8], int x, int y)
         return false;
     }
     selected = true;
-    if (Cells[x][y].occupied_color == 1)
+    // Search the moving side's own piece list for whichever piece sits on (x,y),
+    // instead of re-deriving identity from occupied_value with nested if/else chains.
+    vector<Pieces *> &side = (Cells[x][y].occupied_color == 1) ? whitePieces : blackPieces;
+    selected_piece = NULL;
+    for (int i = 0; i < side.size(); i++)
     {
-        if (Cells[x][y].occupied_value == 3)
-            selected_piece = w_king;
-        else if (Cells[x][y].occupied_value == 2)
-            selected_piece = w_queen;
-        else if (Cells[x][y].occupied_value == 1)
+        if (side[i]->isAlive && side[i]->x == x && side[i]->y == y)
         {
-            if (w_rook[0]->x == x && w_rook[0]->y == y)
-                selected_piece = w_rook[0];
-            else
-                selected_piece = w_rook[1];
-        }
-        else if (Cells[x][y].occupied_value == -2)
-        {
-            if (w_bishop[0]->x == x && w_bishop[0]->y == y)
-                selected_piece = w_bishop[0];
-            else
-                selected_piece = w_bishop[1];
-        }
-        else if (Cells[x][y].occupied_value == -1)
-        {
-            if (w_knight[0]->x == x && w_knight[0]->y == y)
-                selected_piece = w_knight[0];
-            else
-                selected_piece = w_knight[1];
-        }
-        else if (Cells[x][y].occupied_value == -3)
-        {
-            for (int i = 0; i < 8; i++)
-            {
-                if (w_pawn[i]->x == x && w_pawn[i]->y == y)
-                {
-                    selected_piece = w_pawn[i];
-                    break;
-                }
-            }
-        }
-    }
-    else
-    {
-        if (Cells[x][y].occupied_value == 3)
-            selected_piece = b_king;
-        else if (Cells[x][y].occupied_value == 2)
-            selected_piece = b_queen;
-        else if (Cells[x][y].occupied_value == 1)
-        {
-            if (b_rook[0]->x == x && b_rook[0]->y == y)
-                selected_piece = b_rook[0];
-            else
-                selected_piece = b_rook[1];
-        }
-        else if (Cells[x][y].occupied_value == -2)
-        {
-            if (b_bishop[0]->x == x && b_bishop[0]->y == y)
-                selected_piece = b_bishop[0];
-            else
-                selected_piece = b_bishop[1];
-        }
-        else if (Cells[x][y].occupied_value == -1)
-        {
-            if (b_knight[0]->x == x && b_knight[0]->y == y)
-                selected_piece = b_knight[0];
-            else
-                selected_piece = b_knight[1];
-        }
-        else
-        {
-            for (int i = 0; i < 8; i++)
-            {
-                if (b_pawn[i]->x == x && b_pawn[i]->y == y)
-                {
-                    selected_piece = b_pawn[i];
-                    break;
-                }
-            }
+            selected_piece = side[i];
+            break;
         }
     }
     DrawPossibleMoves();
@@ -437,67 +371,11 @@ void Game::moveSelected(Square Cells[][8], int x, int y)
             castlingRook->y = rookToY;
             castlingRook->piece.setPosition(sf::Vector2f(100.f * rookToY + 50.f, 100.f * x + 50.f));
         }
-        if (whiteTurn)
-        {
-            if (w_king->x == a && w_king->y == b)
-                w_king->x = x, w_king->y = y;
-            else if (w_queen->x == a && w_queen->y == b)
-                w_queen->x = x, w_queen->y = y;
-            else if (w_bishop[0]->x == a && w_bishop[0]->y == b)
-                w_bishop[0]->x = x, w_bishop[0]->y = y;
-            else if (w_bishop[1]->x == a && w_bishop[1]->y == b)
-                w_bishop[1]->x = x, w_bishop[1]->y = y;
-            else if (w_knight[0]->x == a && w_knight[0]->y == b)
-                w_knight[0]->x = x, w_knight[0]->y = y;
-            else if (w_knight[1]->x == a && w_knight[1]->y == b)
-                w_knight[1]->x = x, w_knight[1]->y = y;
-            else if (w_rook[0]->x == a && w_rook[0]->y == b)
-                w_rook[0]->x = x, w_rook[0]->y = y;
-            else if (w_rook[1]->x == a && w_rook[1]->y == b)
-                w_rook[1]->x = x, w_rook[1]->y = y;
-            else
-            {
-                for (int i = 0; i < 8; i++)
-                {
-                    if (w_pawn[i]->x == a && w_pawn[i]->y == b)
-                    {
-                        w_pawn[i]->x = x;
-                        w_pawn[i]->y = y;
-                        break;
-                    }
-                }
-            }
-        }
-        else
-        {
-            if (b_king->x == a && b_king->y == b)
-                b_king->x = x, b_king->y = y;
-            else if (b_queen->x == a && b_queen->y == b)
-                b_queen->x = x, b_queen->y = y;
-            else if (b_bishop[0]->x == a && b_bishop[0]->y == b)
-                b_bishop[0]->x = x, b_bishop[0]->y = y;
-            else if (b_bishop[1]->x == a && b_bishop[1]->y == b)
-                b_bishop[1]->x = x, b_bishop[1]->y = y;
-            else if (b_knight[0]->x == a && b_knight[0]->y == b)
-                b_knight[0]->x = x, b_knight[0]->y = y;
-            else if (b_knight[1]->x == a && b_knight[1]->y == b)
-                b_knight[1]->x = x, b_knight[1]->y = y;
-            else if (b_rook[0]->x == a && b_rook[0]->y == b)
-                b_rook[0]->x = x, b_rook[0]->y = y;
-            else if (b_rook[1]->x == a && b_rook[1]->y == b)
-                b_rook[1]->x = x, b_rook[1]->y = y;
-            else
-            {
-                for (int i = 0; i < 8; i++)
-                {
-                    if (b_pawn[i]->x == a && b_pawn[i]->y == b)
-                    {
-                        b_pawn[i]->x = x;
-                        b_pawn[i]->y = y;
-                    }
-                }
-            }
-        }
+        // selected_piece already IS the exact object that moved (found by SelectPiece
+        // scanning the piece list), so its identity never needs to be re-derived here.
+        selected_piece->x = x;
+        selected_piece->y = y;
+
         whiteTurn = !whiteTurn;
         SetRightSideofWindow();
         updateGameStatus();
