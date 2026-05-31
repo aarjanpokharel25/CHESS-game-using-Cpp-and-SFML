@@ -1,6 +1,7 @@
 #include <iostream>
 #include <unistd.h>
 #include <cstdlib>
+#include <string>
 #include <SFML/Graphics.hpp>
 #include "Game.h"
 #include "Pieces.h"
@@ -72,6 +73,7 @@ Game::Game(sf::Color c1, sf::Color c2)
             cells[i][j].y = j;
         }
     }
+    hasLastMove = false;
     Start(c1, c2);
 }
 
@@ -81,6 +83,8 @@ void Game::Start(sf::Color c1, sf::Color c2)
     isOver = false;
     gameStatus = true, whiteTurn = 1, selected = false;
     selected_piece = NULL;
+    moveHistory.clear();
+    hasLastMove = false;
     for (int i = 0; i < 8; i++)
     {
         b_pawn[i]->y = i;
@@ -183,6 +187,16 @@ void Game::SetRightSideofWindow()
         chance.setString("White's Turn");   
 }
 
+std::string Game::squareName(int x, int y)
+{
+    char file = 'a' + y;
+    char rank = '1' + (7 - x);
+    std::string s;
+    s += file;
+    s += rank;
+    return s;
+}
+
 void Game::draw(sf::RenderTarget &target, sf::RenderStates states) const
 {
     target.clear();
@@ -199,6 +213,55 @@ void Game::draw(sf::RenderTarget &target, sf::RenderStates states) const
     target.draw(situation);
     if(isOver == false)
         target.draw(chance);
+
+    // --- move history panel (right side) ---
+    sf::Text histHeader;
+    histHeader.setFont(font);
+    histHeader.setCharacterSize(22);
+    histHeader.setStyle(sf::Text::Bold);
+    histHeader.setFillColor(sf::Color::White);
+    histHeader.setPosition(880.f, 250.f);
+    histHeader.setString("Move History");
+    target.draw(histHeader);
+
+    float listStartY = 285.f;
+    float lineHeight = 24.f;
+    float bottomMargin = 790.f;
+    int maxLines = (int)((bottomMargin - listStartY) / lineHeight);
+    if (maxLines < 1) maxLines = 1;
+    int totalPairs = (int)((moveHistory.size() + 1) / 2);
+    int startPair = 0;
+    if (totalPairs > maxLines)
+        startPair = totalPairs - maxLines;
+    for (int p = startPair; p < totalPairs; p++)
+    {
+        unsigned int wIdx = p * 2, bIdx = p * 2 + 1;
+        std::string line = std::to_string(p + 1) + ". " + moveHistory[wIdx];
+        if (bIdx < moveHistory.size())
+            line += "   " + moveHistory[bIdx];
+        sf::Text t;
+        t.setFont(font);
+        t.setCharacterSize(18);
+        t.setFillColor(sf::Color::White);
+        t.setPosition(880.f, listStartY + (p - startPair) * lineHeight);
+        t.setString(line);
+        target.draw(t);
+    }
+
+    // --- last move highlight: border only, on the two squares of the last move ---
+    if (hasLastMove)
+    {
+        sf::RectangleShape hl;
+        hl.setSize(sf::Vector2f(100.f, 100.f));
+        hl.setFillColor(sf::Color::Transparent);
+        hl.setOutlineColor(sf::Color(0xF7D34Bcc));
+        hl.setOutlineThickness(-4.f);
+        hl.setPosition(lastMoveFromY * 100.f, lastMoveFromX * 100.f);
+        target.draw(hl);
+        hl.setPosition(lastMoveToY * 100.f, lastMoveToX * 100.f);
+        target.draw(hl);
+    }
+
     for (int i = 0; i < moves.size(); i++)
     {
         target.draw(moves[i].square);
@@ -323,6 +386,8 @@ void Game::moveSelected(Square Cells[][8], int x, int y)
     {
         selected_piece->piece.setPosition(sf::Vector2f(100.f * y + 50.f, 100.f * x + 50.f));
         int a = selected_piece->x, b = selected_piece->y;
+        int pieceVal = selected_piece->occupied_value;
+        bool isCaptureMove = (Cells[x][y].occupied_color != 0 && Cells[x][y].occupied_color != Cells[a][b].occupied_color);
         if (Cells[x][y].occupied_color != 0 && Cells[x][y].occupied_color != Cells[a][b].occupied_color)
         {
             if (Cells[x][y].occupied_color == 1)
@@ -371,14 +436,44 @@ void Game::moveSelected(Square Cells[][8], int x, int y)
             castlingRook->y = rookToY;
             castlingRook->piece.setPosition(sf::Vector2f(100.f * rookToY + 50.f, 100.f * x + 50.f));
         }
+
+        // --- build the algebraic notation string for this move ---
+        char letter = 0;
+        if (pieceVal == 3) letter = 'K';
+        else if (pieceVal == 2) letter = 'Q';
+        else if (pieceVal == 1) letter = 'R';
+        else if (pieceVal == -1) letter = 'N';
+        else if (pieceVal == -2) letter = 'B';
+        std::string notation;
+        if (isCastle)
+        {
+            notation = (y == 6) ? "O-O" : "O-O-O";
+        }
+        else
+        {
+            if (letter) notation += letter;
+            if (pieceVal == -3 && isCaptureMove)
+                notation += char('a' + b);
+            if (isCaptureMove) notation += "x";
+            notation += squareName(x, y);
+        }
+
         // selected_piece already IS the exact object that moved (found by SelectPiece
         // scanning the piece list), so its identity never needs to be re-derived here.
         selected_piece->x = x;
         selected_piece->y = y;
 
+        hasLastMove = true;
+        lastMoveFromX = a;
+        lastMoveFromY = b;
+        lastMoveToX = x;
+        lastMoveToY = y;
+
+        moveHistory.push_back(notation);
         whiteTurn = !whiteTurn;
         SetRightSideofWindow();
         updateGameStatus();
+        AppendMoveSuffix();
     }
     selected_piece = NULL;
     selected = false;
@@ -451,4 +546,15 @@ void Game::updateGameStatus()
     {
         situation.setString("");
     }
+}
+
+void Game::AppendMoveSuffix()
+{
+    if (moveHistory.empty())
+        return;
+    std::string s = situation.getString().toAnsiString();
+    if (s.find("CHECKMATE") != std::string::npos)
+        moveHistory.back() += "#";
+    else if (s.find("CHECK") != std::string::npos)
+        moveHistory.back() += "+";
 }
