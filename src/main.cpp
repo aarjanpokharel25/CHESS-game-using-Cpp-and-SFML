@@ -6,7 +6,7 @@ int main()
 {
 label:
     sf::RenderWindow window(sf::VideoMode(1100, 800), "Chess with SFML", sf::Style::Titlebar | sf::Style::Close);
-    Game chess(sf::Color(0xf1e8daff), sf::Color(0x64bfa4ff));
+    Game chess(sf::Color(0xf1e8daff), sf::Color(0xc2a18bff));
     while (window.isOpen())
     {
         sf::Event e;
