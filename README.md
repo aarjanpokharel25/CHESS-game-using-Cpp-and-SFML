@@ -2,7 +2,7 @@
 
 A 2-player chess game built with C++ for logic and SFML for graphics, featuring all chess rules, move validation, check/checkmate detection, and clickable piece movement.
 
-You need to have SFML installed to compile. https://www.sfml-dev.org/download/sfml/2.5.1/
+You need to have SFML installed to compile. https://www.sfml-dev.org/download/sfml/2.6.1/
 
 Compile Instructions:
 
