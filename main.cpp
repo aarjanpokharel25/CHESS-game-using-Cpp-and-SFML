@@ -1,5 +1,7 @@
+//This is the main cpp file for the chess game
+
 #include<iostream>
 int main()
 {
-  std::cout<<"This is chess project" << std :: endl;
+  
 }
