@@ -1,1 +1,1 @@
-
+This file contains all the pieces textures and board graphics
