@@ -18,7 +18,11 @@ label:
             {
                 if (e.mouseButton.button == sf::Mouse::Left)
                 {
-                    if (e.mouseButton.x >= 0 && e.mouseButton.x <= 800 && e.mouseButton.y >= 0 && e.mouseButton.y <= 800)
+                    if (chess.isAwaitingPromotion())
+                    {
+                        chess.HandlePromotionClick(e.mouseButton.x, e.mouseButton.y);
+                    }
+                    else if (e.mouseButton.x >= 0 && e.mouseButton.x <= 800 && e.mouseButton.y >= 0 && e.mouseButton.y <= 800)
                     {
                         int x = e.mouseButton.y / 100, y = e.mouseButton.x / 100;
                         if (!chess.getSelected() && chess.isOver == false)
