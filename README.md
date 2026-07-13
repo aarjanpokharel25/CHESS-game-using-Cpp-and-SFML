@@ -8,3 +8,4 @@ Compile Instructions:
 
 Windows MinGW:
 (In developmental phase, to be added soon...)
+download msys2 for easier compilation
