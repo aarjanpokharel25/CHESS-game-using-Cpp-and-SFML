@@ -29,7 +29,7 @@ public:
     // in check, checkmated, or stalemated, and updates isOver/situation accordingly.
     void updateGameStatus();
     Square cells[8][8];
-    bool isOver;
+    bool isOver;//bool is ending
 private:
     vector<Square> moves;
     vector<sf::RectangleShape> newmoves;
