@@ -5,7 +5,7 @@
 #include "Game.h"
 #include "Pieces.h"
 #include "Square.h"
-
+//fixed logic
 Game::Game(sf::Color c1, sf::Color c2)
 {
     font.loadFromFile("Textures/roboto.ttf");
