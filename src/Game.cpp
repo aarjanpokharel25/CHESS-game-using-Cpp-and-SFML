@@ -217,12 +217,12 @@ void Game::draw(sf::RenderTarget &target, sf::RenderStates states) const
         {
             target.draw(whitePieces[i]->piece);
         }
-        // if(!whitePieces[i]->isAlive){
-        //      if(!w_king->isAlive){
-        //         sleep(3);
-        //         exit(0);
-        //      }
-        // }
+         if(!whitePieces[i]->isAlive){
+              if(!w_king->isAlive){
+                 sleep(3);
+                 exit(0);
+              }
+         }
     }
     for (int i = 0; i < blackPieces.size(); i++)
     {
