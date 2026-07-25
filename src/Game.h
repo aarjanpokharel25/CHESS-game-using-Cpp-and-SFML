@@ -2,6 +2,7 @@
 #define GAME_H
 
 #include <SFML/Graphics.hpp>
+#include <string>
 #include "Pieces.h"
 #include "King.h"
 #include "Bishop.h"
@@ -28,6 +29,18 @@ public:
     // Called after every completed move: figures out whether the side now to move is
     // in check, checkmated, or stalemated, and updates isOver/situation accordingly.
     void updateGameStatus();
+    // Converts board coordinates to algebraic notation, e.g. (6,4) -> "e2".
+    std::string squareName(int x, int y);
+    // Appends "+" or "#" to the last recorded move if the position is now check/mate.
+    void AppendMoveSuffix();
+    // True while we're waiting on the user to pick a promotion piece; blocks normal input.
+    bool isAwaitingPromotion();
+    // Handles a click while a promotion choice is on screen. Returns true if the click
+    // was consumed by the promotion UI (regardless of whether it hit a choice).
+    bool HandlePromotionClick(int mouseX, int mouseY);
+    // Finishes a pending promotion: replaces the pawn with the chosen piece (0=Queen,
+    // 1=Rook, 2=Bishop, 3=Knight), records the move, and hands the turn back over.
+    void ResolvePromotion(int choice);
     Square cells[8][8];
     bool isOver;
 private:
@@ -56,6 +69,22 @@ private:
     sf::RectangleShape infoRestart;
     sf::Text turn, situation, textRestart, chance;
     int number_of_moves;
+
+    // --- last move highlight (border only, shown on the two squares of the last move) ---
+    bool hasLastMove;
+    int lastMoveFromX, lastMoveFromY, lastMoveToX, lastMoveToY;
+
+    // --- move history, shown as algebraic notation on the side panel ---
+    vector<std::string> moveHistory;
+
+    // --- pawn promotion state ---
+    bool awaitingPromotion;
+    int promotionColor; // 1 = white, 0 = black (matches piece constructor convention)
+    int promotionX, promotionY;
+    Pieces *pendingPawn;
+    std::string pendingNotation;
+    Pieces *promoChoices[4]; // 0=Queen,1=Rook,2=Bishop,3=Knight (preview pieces, one is kept)
+    sf::RectangleShape promoBoxes[4];
 };
 
 #endif
