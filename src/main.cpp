@@ -15,7 +15,7 @@ label:
     sf::View gameView(sf::FloatRect(0.f, 0.f, 1100.f, 800.f));
     window.setView(gameView); // Apply the view to the window
 
-    Game chess(sf::Color(0xf1e8daff), sf::Color(0x64bfa4ff));
+    Game chess(sf::Color(0xf1e8daff), sf::Color(0xc2a28bff));
 
     while (window.isOpen())
     {

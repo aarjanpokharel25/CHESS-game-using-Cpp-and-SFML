@@ -325,7 +325,7 @@ void Game::DrawPossibleMoves()
         sf::RectangleShape tmp;
         tmp.setPosition(sf::Vector2f((moves[i].y) * 100.f, (moves[i].x) * 100.f));
         tmp.setSize(sf::Vector2f(100.f, 100.f));
-        tmp.setFillColor(sf::Color(0x66b4cc50));
+        tmp.setFillColor(sf::Color(0x66b4ccaa));
         newmoves.push_back(tmp);
     }
     sf::RectangleShape tmp;
