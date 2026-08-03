@@ -1,6 +1,7 @@
 #include <iostream>
 #include <unistd.h>
 #include <cstdlib>
+#include <string>
 #include <SFML/Graphics.hpp>
 #include "Game.h"
 #include "Pieces.h"
@@ -72,6 +73,10 @@ Game::Game(sf::Color c1, sf::Color c2)
             cells[i][j].y = j;
         }
     }
+    for (int i = 0; i < 4; i++)
+        promoChoices[i] = NULL;
+    hasLastMove = false;
+    awaitingPromotion = false;
     Start(c1, c2);
 }
 
@@ -81,6 +86,9 @@ void Game::Start(sf::Color c1, sf::Color c2)
     isOver = false;
     gameStatus = true, whiteTurn = 1, selected = false;
     selected_piece = NULL;
+    moveHistory.clear();
+    hasLastMove = false;
+    awaitingPromotion = false;
     for (int i = 0; i < 8; i++)
     {
         b_pawn[i]->y = i;
@@ -183,6 +191,16 @@ void Game::SetRightSideofWindow()
         chance.setString("White's Turn");   
 }
 
+std::string Game::squareName(int x, int y)
+{
+    char file = 'a' + y;
+    char rank = '1' + (7 - x);
+    std::string s;
+    s += file;
+    s += rank;
+    return s;
+}
+
 void Game::draw(sf::RenderTarget &target, sf::RenderStates states) const
 {
     target.clear();
@@ -199,6 +217,55 @@ void Game::draw(sf::RenderTarget &target, sf::RenderStates states) const
     target.draw(situation);
     if(isOver == false)
         target.draw(chance);
+
+    // --- move history panel (right side) ---
+    sf::Text histHeader;
+    histHeader.setFont(font);
+    histHeader.setCharacterSize(22);
+    histHeader.setStyle(sf::Text::Bold);
+    histHeader.setFillColor(sf::Color::White);
+    histHeader.setPosition(880.f, 250.f);
+    histHeader.setString("Move History");
+    target.draw(histHeader);
+
+    float listStartY = 285.f;
+    float lineHeight = 24.f;
+    float bottomMargin = 790.f;
+    int maxLines = (int)((bottomMargin - listStartY) / lineHeight);
+    if (maxLines < 1) maxLines = 1;
+    int totalPairs = (int)((moveHistory.size() + 1) / 2);
+    int startPair = 0;
+    if (totalPairs > maxLines)
+        startPair = totalPairs - maxLines;
+    for (int p = startPair; p < totalPairs; p++)
+    {
+        unsigned int wIdx = p * 2, bIdx = p * 2 + 1;
+        std::string line = std::to_string(p + 1) + ". " + moveHistory[wIdx];
+        if (bIdx < moveHistory.size())
+            line += "   " + moveHistory[bIdx];
+        sf::Text t;
+        t.setFont(font);
+        t.setCharacterSize(18);
+        t.setFillColor(sf::Color::White);
+        t.setPosition(880.f, listStartY + (p - startPair) * lineHeight);
+        t.setString(line);
+        target.draw(t);
+    }
+
+    // --- last move highlight: border only, on the two squares of the last move ---
+    if (hasLastMove)
+    {
+        sf::RectangleShape hl;
+        hl.setSize(sf::Vector2f(100.f, 100.f));
+        hl.setFillColor(sf::Color::Transparent);
+        hl.setOutlineColor(sf::Color(0xF7D34Bcc));
+        hl.setOutlineThickness(-4.f);
+        hl.setPosition(lastMoveFromY * 100.f, lastMoveFromX * 100.f);
+        target.draw(hl);
+        hl.setPosition(lastMoveToY * 100.f, lastMoveToX * 100.f);
+        target.draw(hl);
+    }
+
     for (int i = 0; i < moves.size(); i++)
     {
         target.draw(moves[i].square);
@@ -230,12 +297,16 @@ void Game::draw(sf::RenderTarget &target, sf::RenderStates states) const
         {
             target.draw(blackPieces[i]->piece);
         }
-        // if(!blackPieces[i]->isAlive){
-        //      if(!b_king->isAlive){
-        //         sleep(3);
-        //         exit(0);
-        //      }
-        // }
+    }
+
+    // --- pawn promotion picker overlay, drawn on top of everything else ---
+    if (awaitingPromotion)
+    {
+        for (int i = 0; i < 4; i++)
+            target.draw(promoBoxes[i]);
+        for (int i = 0; i < 4; i++)
+            if (promoChoices[i] != NULL)
+                target.draw(promoChoices[i]->piece);
     }
 }
 
@@ -260,7 +331,7 @@ void Game::DrawPossibleMoves()
         sf::RectangleShape tmp;
         tmp.setPosition(sf::Vector2f((moves[i].y) * 100.f, (moves[i].x) * 100.f));
         tmp.setSize(sf::Vector2f(100.f, 100.f));
-        tmp.setFillColor(sf::Color(0x66b4cc50));
+        tmp.setFillColor(sf::Color(0x66b4ccaa));
         newmoves.push_back(tmp);
     }
     sf::RectangleShape tmp;
@@ -274,6 +345,8 @@ void Game::DrawPossibleMoves()
 
 bool Game::SelectPiece(Square Cells[][8], int x, int y)
 {
+    if (awaitingPromotion)
+        return false;
     if (Cells[x][y].occupied_color == 0)
     {
         selected_piece = NULL;
@@ -285,87 +358,23 @@ bool Game::SelectPiece(Square Cells[][8], int x, int y)
         return false;
     }
     selected = true;
-    if (Cells[x][y].occupied_color == 1)
+    // Search the moving side's own piece list for whichever piece sits on (x,y).
+    // This also transparently covers promoted pieces (extra queens/rooks/etc.)
+    // since they're pushed into these same vectors when created.
+    vector<Pieces *> &side = (Cells[x][y].occupied_color == 1) ? whitePieces : blackPieces;
+    selected_piece = NULL;
+    for (int i = 0; i < side.size(); i++)
     {
-        if (Cells[x][y].occupied_value == 3)
-            selected_piece = w_king;
-        else if (Cells[x][y].occupied_value == 2)
-            selected_piece = w_queen;
-        else if (Cells[x][y].occupied_value == 1)
+        if (side[i]->isAlive && side[i]->x == x && side[i]->y == y)
         {
-            if (w_rook[0]->x == x && w_rook[0]->y == y)
-                selected_piece = w_rook[0];
-            else
-                selected_piece = w_rook[1];
-        }
-        else if (Cells[x][y].occupied_value == -2)
-        {
-            if (w_bishop[0]->x == x && w_bishop[0]->y == y)
-                selected_piece = w_bishop[0];
-            else
-                selected_piece = w_bishop[1];
-        }
-        else if (Cells[x][y].occupied_value == -1)
-        {
-            if (w_knight[0]->x == x && w_knight[0]->y == y)
-                selected_piece = w_knight[0];
-            else
-                selected_piece = w_knight[1];
-        }
-        else if (Cells[x][y].occupied_value == -3)
-        {
-            for (int i = 0; i < 8; i++)
-            {
-                if (w_pawn[i]->x == x && w_pawn[i]->y == y)
-                {
-                    selected_piece = w_pawn[i];
-                    break;
-                }
-            }
-        }
-    }
-    else
-    {
-        if (Cells[x][y].occupied_value == 3)
-            selected_piece = b_king;
-        else if (Cells[x][y].occupied_value == 2)
-            selected_piece = b_queen;
-        else if (Cells[x][y].occupied_value == 1)
-        {
-            if (b_rook[0]->x == x && b_rook[0]->y == y)
-                selected_piece = b_rook[0];
-            else
-                selected_piece = b_rook[1];
-        }
-        else if (Cells[x][y].occupied_value == -2)
-        {
-            if (b_bishop[0]->x == x && b_bishop[0]->y == y)
-                selected_piece = b_bishop[0];
-            else
-                selected_piece = b_bishop[1];
-        }
-        else if (Cells[x][y].occupied_value == -1)
-        {
-            if (b_knight[0]->x == x && b_knight[0]->y == y)
-                selected_piece = b_knight[0];
-            else
-                selected_piece = b_knight[1];
-        }
-        else
-        {
-            for (int i = 0; i < 8; i++)
-            {
-                if (b_pawn[i]->x == x && b_pawn[i]->y == y)
-                {
-                    selected_piece = b_pawn[i];
-                    break;
-                }
-            }
+            selected_piece = side[i];
+            break;
         }
     }
     DrawPossibleMoves();
     return true;
 }
+
 bool Game::getSelected()
 {
     return selected;
@@ -376,10 +385,10 @@ void Game::moveSelected(Square Cells[][8], int x, int y)
     if (selected_piece == NULL)
         return;
     bool valid = false;
-    vector<Square> a = getLegalMoves(selected_piece);
-    for (int i = 0; i < a.size(); i++)
+    vector<Square> legalMoves = getLegalMoves(selected_piece);
+    for (int i = 0; i < legalMoves.size(); i++)
     {
-        if (x == a[i].x && y == a[i].y)
+        if (x == legalMoves[i].x && y == legalMoves[i].y)
         {
             valid = true;
             break;
@@ -387,8 +396,33 @@ void Game::moveSelected(Square Cells[][8], int x, int y)
     }
     if (valid)
     {
-        selected_piece->piece.setPosition(sf::Vector2f(100.f * y + 50.f, 100.f * x + 50.f));
         int a = selected_piece->x, b = selected_piece->y;
+        int pieceVal = selected_piece->occupied_value;
+        bool isCaptureMove = (Cells[x][y].occupied_color != 0 && Cells[x][y].occupied_color != Cells[a][b].occupied_color);
+        bool isCastleMove = (pieceVal == 3 && abs(y - b) == 2);
+        bool isPromotionMove = (pieceVal == -3) && ((whiteTurn && x == 0) || (!whiteTurn && x == 7));
+
+        std::string notation;
+        if (isCastleMove)
+        {
+            notation = (y == 6) ? "O-O" : "O-O-O";
+        }
+        else
+        {
+            char letter = 0;
+            if (pieceVal == 3) letter = 'K';
+            else if (pieceVal == 2) letter = 'Q';
+            else if (pieceVal == 1) letter = 'R';
+            else if (pieceVal == -1) letter = 'N';
+            else if (pieceVal == -2) letter = 'B';
+            if (letter) notation += letter;
+            if (pieceVal == -3 && isCaptureMove)
+                notation += char('a' + b);
+            if (isCaptureMove) notation += "x";
+            notation += squareName(x, y);
+        }
+
+        selected_piece->piece.setPosition(sf::Vector2f(100.f * y + 50.f, 100.f * x + 50.f));
         if (Cells[x][y].occupied_color != 0 && Cells[x][y].occupied_color != Cells[a][b].occupied_color)
         {
             if (Cells[x][y].occupied_color == 1)
@@ -416,13 +450,9 @@ void Game::moveSelected(Square Cells[][8], int x, int y)
         Cells[x][y].occupied_value = selected_piece->occupied_value;
         Cells[a][b].occupied_value = 0;
         Cells[selected_piece->x][selected_piece->y].occupied_color = 0;
-        // Mark the vacated square as "moved from" - this is how King::getMoves knows
-        // later whether the king/rook that used to live here has ever moved, for castling.
         Cells[a][b].hasMoved = true;
-        // Castling: if the king just moved two columns, bring the corresponding rook
-        // along with it (the rook's own destination square also gets hasMoved=true).
-        bool isCastle = (selected_piece->occupied_value == 3 && abs(y - b) == 2);
-        if (isCastle)
+
+        if (isCastleMove)
         {
             int rookFromY = (y == 6) ? 7 : 0;
             int rookToY = (y == 6) ? 5 : 3;
@@ -437,70 +467,59 @@ void Game::moveSelected(Square Cells[][8], int x, int y)
             castlingRook->y = rookToY;
             castlingRook->piece.setPosition(sf::Vector2f(100.f * rookToY + 50.f, 100.f * x + 50.f));
         }
-        if (whiteTurn)
+
+        // selected_piece already IS the exact object that moved (found by SelectPiece
+        // scanning the piece list), so its identity never needs to be re-derived here -
+        // this also makes promoted pieces (extra queens etc.) work with no special case.
+        selected_piece->x = x;
+        selected_piece->y = y;
+
+        hasLastMove = true;
+        lastMoveFromX = a;
+        lastMoveFromY = b;
+        lastMoveToX = x;
+        lastMoveToY = y;
+
+        if (isPromotionMove)
         {
-            if (w_king->x == a && w_king->y == b)
-                w_king->x = x, w_king->y = y;
-            else if (w_queen->x == a && w_queen->y == b)
-                w_queen->x = x, w_queen->y = y;
-            else if (w_bishop[0]->x == a && w_bishop[0]->y == b)
-                w_bishop[0]->x = x, w_bishop[0]->y = y;
-            else if (w_bishop[1]->x == a && w_bishop[1]->y == b)
-                w_bishop[1]->x = x, w_bishop[1]->y = y;
-            else if (w_knight[0]->x == a && w_knight[0]->y == b)
-                w_knight[0]->x = x, w_knight[0]->y = y;
-            else if (w_knight[1]->x == a && w_knight[1]->y == b)
-                w_knight[1]->x = x, w_knight[1]->y = y;
-            else if (w_rook[0]->x == a && w_rook[0]->y == b)
-                w_rook[0]->x = x, w_rook[0]->y = y;
-            else if (w_rook[1]->x == a && w_rook[1]->y == b)
-                w_rook[1]->x = x, w_rook[1]->y = y;
-            else
+            awaitingPromotion = true;
+            promotionColor = whiteTurn ? 1 : 0;
+            promotionX = x;
+            promotionY = y;
+            pendingPawn = selected_piece;
+            pendingNotation = notation;
+
+            promoChoices[0] = new Queen(promotionColor);
+            promoChoices[1] = new Rook(promotionColor);
+            promoChoices[2] = new Bishop(promotionColor);
+            promoChoices[3] = new Knight(promotionColor);
+
+            int row0 = (x == 0) ? 0 : 7;
+            int rowStep = (x == 0) ? 1 : -1;
+            for (int i = 0; i < 4; i++)
             {
-                for (int i = 0; i < 8; i++)
-                {
-                    if (w_pawn[i]->x == a && w_pawn[i]->y == b)
-                    {
-                        w_pawn[i]->x = x;
-                        w_pawn[i]->y = y;
-                        break;
-                    }
-                }
+                int row = row0 + rowStep * i;
+                promoBoxes[i].setPosition(y * 100.f, row * 100.f);
+                promoBoxes[i].setSize(sf::Vector2f(100.f, 100.f));
+                promoBoxes[i].setFillColor(sf::Color(0xf0d878ee));
+                promoBoxes[i].setOutlineColor(sf::Color::Black);
+                promoBoxes[i].setOutlineThickness(2.f);
+                promoChoices[i]->x = row;
+                promoChoices[i]->y = y;
+                promoChoices[i]->piece.setPosition(y * 100.f + 50.f, row * 100.f + 50.f);
+                promoChoices[i]->piece.setOrigin(promoChoices[i]->piece.getTexture()->getSize().x / 2.f, promoChoices[i]->piece.getTexture()->getSize().y / 2.f);
+                promoChoices[i]->piece.setScale(0.46875f, 0.46875f);
             }
         }
+
         else
         {
-            if (b_king->x == a && b_king->y == b)
-                b_king->x = x, b_king->y = y;
-            else if (b_queen->x == a && b_queen->y == b)
-                b_queen->x = x, b_queen->y = y;
-            else if (b_bishop[0]->x == a && b_bishop[0]->y == b)
-                b_bishop[0]->x = x, b_bishop[0]->y = y;
-            else if (b_bishop[1]->x == a && b_bishop[1]->y == b)
-                b_bishop[1]->x = x, b_bishop[1]->y = y;
-            else if (b_knight[0]->x == a && b_knight[0]->y == b)
-                b_knight[0]->x = x, b_knight[0]->y = y;
-            else if (b_knight[1]->x == a && b_knight[1]->y == b)
-                b_knight[1]->x = x, b_knight[1]->y = y;
-            else if (b_rook[0]->x == a && b_rook[0]->y == b)
-                b_rook[0]->x = x, b_rook[0]->y = y;
-            else if (b_rook[1]->x == a && b_rook[1]->y == b)
-                b_rook[1]->x = x, b_rook[1]->y = y;
-            else
-            {
-                for (int i = 0; i < 8; i++)
-                {
-                    if (b_pawn[i]->x == a && b_pawn[i]->y == b)
-                    {
-                        b_pawn[i]->x = x;
-                        b_pawn[i]->y = y;
-                    }
-                }
-            }
+            moveHistory.push_back(notation);
+            whiteTurn = !whiteTurn;
+            SetRightSideofWindow();
+            updateGameStatus();
+            AppendMoveSuffix();
         }
-        whiteTurn = !whiteTurn;
-        SetRightSideofWindow();
-        updateGameStatus();
     }
     selected_piece = NULL;
     selected = false;
@@ -573,4 +592,74 @@ void Game::updateGameStatus()
     {
         situation.setString("");
     }
+}
+
+void Game::AppendMoveSuffix()
+{
+    if (moveHistory.empty())
+        return;
+    std::string s = situation.getString().toAnsiString();
+    if (s.find("CHECKMATE") != std::string::npos)
+        moveHistory.back() += "#";
+    else if (s.find("CHECK") != std::string::npos)
+        moveHistory.back() += "+";
+}
+
+bool Game::isAwaitingPromotion()
+{
+    return awaitingPromotion;
+}
+
+bool Game::HandlePromotionClick(int mouseX, int mouseY)
+{
+    if (!awaitingPromotion)
+        return false;
+    for (int i = 0; i < 4; i++)
+    {
+        sf::FloatRect b = promoBoxes[i].getGlobalBounds();
+        if (b.contains((float)mouseX, (float)mouseY))
+        {
+            ResolvePromotion(i);
+            break;
+        }
+    }
+    // Any click while the picker is open is consumed by it - the board underneath
+    // stays frozen until a choice is made.
+    return true;
+}
+
+void Game::ResolvePromotion(int choice)
+{
+    if (!awaitingPromotion)
+        return;
+    Pieces *chosen = promoChoices[choice];
+    for (int i = 0; i < 4; i++)
+    {
+        if (i != choice)
+            delete promoChoices[i];
+        promoChoices[i] = NULL;
+    }
+
+    pendingPawn->isAlive = false;
+    cells[promotionX][promotionY].occupied_value = chosen->occupied_value;
+
+    if (promotionColor == 1)
+        whitePieces.push_back(chosen);
+    else
+        blackPieces.push_back(chosen);
+
+    char letter = 'Q';
+    if (chosen->occupied_value == 1) letter = 'R';
+    else if (chosen->occupied_value == -2) letter = 'B';
+    else if (chosen->occupied_value == -1) letter = 'N';
+    moveHistory.push_back(pendingNotation + "=" + letter);
+
+    awaitingPromotion = false;
+    whiteTurn = !whiteTurn;
+    SetRightSideofWindow();
+    updateGameStatus();
+    AppendMoveSuffix();
+
+    selected_piece = NULL;
+    selected = false;
 }
