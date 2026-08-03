@@ -42,7 +42,7 @@ public:
     // 1=Rook, 2=Bishop, 3=Knight), records the move, and hands the turn back over.
     void ResolvePromotion(int choice);
     Square cells[8][8];
-    bool isOver;
+    bool isOver;//bool is ending
 private:
     vector<Square> moves;
     vector<sf::RectangleShape> newmoves;

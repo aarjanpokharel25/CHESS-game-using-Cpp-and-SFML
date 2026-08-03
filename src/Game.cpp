@@ -6,7 +6,7 @@
 #include "Game.h"
 #include "Pieces.h"
 #include "Square.h"
-
+//fixed logic
 Game::Game(sf::Color c1, sf::Color c2)
 {
     font.loadFromFile("Textures/roboto.ttf");
@@ -284,6 +284,12 @@ void Game::draw(sf::RenderTarget &target, sf::RenderStates states) const
         {
             target.draw(whitePieces[i]->piece);
         }
+         /*if(!whitePieces[i]->isAlive){
+              if(!w_king->isAlive){
+                 sleep(3);
+                 exit(0);
+              }
+         }*/
     }
     for (int i = 0; i < blackPieces.size(); i++)
     {
